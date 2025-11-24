@@ -43,7 +43,7 @@
             margin-bottom: 30px; 
         }
 
-        #submission-form-container { /* Renommé pour contenir le form ou le login */
+        #submission-form-container { 
             background-color: var(--bg-medium); 
             padding: 20px; 
             border-radius: 10px; 
@@ -179,11 +179,11 @@
         
         let currentTrack = null;
         let adminClickCount = 0;
-        let isSubmissionForm = true; // Pour savoir si on affiche le formulaire ou le login admin
+        let isSubmissionForm = true; 
 
         // --- ADMIN LOGIN (Trigger) ---
         document.getElementById('radio-title-trigger').addEventListener('click', () => {
-            if (!isSubmissionForm) return; // Si le panneau admin est déjà affiché, ignorer
+            if (!isSubmissionForm) return; 
 
             adminClickCount++;
             if (adminClickCount >= 6) {
@@ -213,32 +213,37 @@
             const accessButton = document.getElementById('admin-access-btn');
             const errorMsg = document.getElementById('admin-error');
             
+            // Verrouillage du bouton
             accessButton.disabled = true;
             accessButton.textContent = 'Vérification...';
             errorMsg.style.display = 'none';
 
             try {
+                // ⬅️ CETTE REQUÊTE DOIT ATTEINDRE server.js 
                 const response = await fetch(ADMIN_LOGIN_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: password })
                 });
+                
+                // Si la requête échoue ici (erreur réseau/Ngrok), le catch sera appelé, 
+                // sinon, on continue pour lire la réponse du serveur.
 
                 const result = await response.json();
 
                 if (result.success && result.token) {
-                    // Stocke le jeton renvoyé par le serveur
+                    // Stocke le jeton et redirige
                     localStorage.setItem(ADMIN_TOKEN_KEY, result.token);
-                    
-                    // Redirige vers la page admin protégée
                     window.location.href = 'admin.html'; 
                 } else {
                     errorMsg.textContent = result.message || 'Mot de passe incorrect.';
                     errorMsg.style.display = 'block';
                 }
             } catch (error) {
+                // C'est ici que l'erreur "Erreur de connexion au serveur" est affichée.
                 errorMsg.textContent = 'Erreur de connexion au serveur.';
                 errorMsg.style.display = 'block';
+                console.error("Échec de l'envoi de la requête au serveur:", error);
             } finally {
                 accessButton.disabled = false;
                 accessButton.textContent = 'Accéder';
@@ -249,7 +254,7 @@
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('audioFile');
         
-        if (dropZone && fileInput) { // Vérifie que les éléments existent (car ils sont supprimés si on va en admin)
+        if (dropZone && fileInput) { 
             dropZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 dropZone.classList.add('dragover');
@@ -285,7 +290,7 @@
             const submitButton = document.getElementById('submit-button');
             const countdownMessage = document.getElementById('countdown-message');
             
-            if (!submitButton) return; // Sort si on est dans le panneau de login admin
+            if (!submitButton || !isSubmissionForm) return; 
 
             if (timeElapsed < COOLDOWN_MS) {
                 const remaining = Math.ceil((COOLDOWN_MS - timeElapsed) / 1000);
@@ -302,7 +307,7 @@
             }
         }
 
-        if (document.getElementById('submit-music')) { // Vérifie que le formulaire est présent
+        if (document.getElementById('submit-music')) { 
             document.getElementById('submit-music').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const submitButton = document.getElementById('submit-button');
@@ -326,7 +331,7 @@
                 try {
                     const response = await fetch(API_URL, {
                         method: 'POST',
-                        body: formData
+                        body: formData // Pas de header Content-Type ici, car FormData le gère
                     });
                     
                     const result = await response.json();
