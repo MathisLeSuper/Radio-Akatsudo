@@ -3,246 +3,317 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔒 Admin - Radio Akatsudo</title>
+    <title>🔒 Admin Panel - Radio Akatsudo</title>
     <style>
-        /* Copiez ici TOUT le bloc <style> de index.html (sauf les parties non pertinentes si vous voulez) */
         :root {
-            --bg-dark: #222;
-            --bg-medium: #333;
+            --bg-dark: #1e1e1e;
+            --bg-medium: #2d2d30;
             --text-light: #f4f4f4;
             --accent-green: #4CAF50;
-            --accent-hover: #6BCB77;
-            --error-red: #D32F2F;
+            --accent-red: #D32F2F;
+            --accent-blue: #2196F3;
         }
 
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            max-width: 900px; 
-            margin: 0 auto; 
-            padding: 20px; 
-            background-color: var(--bg-dark); 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
             color: var(--text-light);
+            padding: 20px;
         }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: var(--bg-medium);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 { color: var(--accent-green); border-bottom: 2px solid var(--accent-green); padding-bottom: 10px; }
         
-        header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            border-bottom: 2px solid var(--accent-green); 
-            padding-bottom: 10px;
-        }
-
-        h1 { color: var(--accent-green); }
-        h2 { border-bottom: 1px solid var(--bg-medium); padding-bottom: 5px; margin-bottom: 15px; }
-
-        input[type="text"], input[type="password"] { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 10px 0; 
-            border: 1px solid var(--bg-dark); 
-            border-radius: 6px; 
-            box-sizing: border-box; 
-            background-color: #444;
+        /* Navigation (Tabs) */
+        .tabs { margin-bottom: 20px; border-bottom: 1px solid #444; }
+        .tabs button {
+            background-color: transparent;
+            border: none;
             color: var(--text-light);
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.3s;
         }
-        
-        button { 
-            background-color: var(--accent-green); 
-            color: var(--bg-dark); 
+        .tabs button:hover { color: var(--accent-green); }
+        .tabs button.active {
+            border-bottom: 3px solid var(--accent-green);
+            color: var(--accent-green);
             font-weight: bold;
-            padding: 12px 20px; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            transition: background-color 0.3s, transform 0.1s; 
-            width: auto;
-            margin-top: 10px;
-        }
-        button:hover:not(:disabled) { 
-            background-color: var(--accent-hover); 
-            transform: translateY(-1px);
-        }
-        button:disabled { 
-            background-color: #666; 
-            cursor: not-allowed; 
         }
 
-        .admin-track { border-bottom: 1px solid #444; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
-        .admin-action-btn { background-color: var(--error-red); width: auto; padding: 5px 10px; margin-left: 10px; font-size: 14px; }
-        .admin-action-btn.ban { background-color: orange; }
-        .logout-btn { background-color: #aaa; }
+        /* Contenu */
+        .tab-content { padding-top: 20px; }
+        
+        /* Tableaux */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #444; }
+        th { background-color: #38383a; }
+        
+        /* Boutons d'Action */
+        .btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+        .btn:hover { opacity: 0.8; }
+        .btn-delete { background-color: var(--accent-red); color: white; }
+        .btn-ban { background-color: #f39c12; color: white; }
+        .btn-unban { background-color: var(--accent-blue); color: white; }
+        .btn-logout { background-color: #555; color: white; margin-top: 20px; }
+        
+        /* Piste en cours */
+        #current-track-info {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-dark);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        #current-track-info img { width: 60px; height: 60px; border-radius: 4px; margin-right: 15px; object-fit: cover; }
+        
+        /* Bannis */
+        .banned-status { color: var(--accent-red); font-weight: bold; }
+        .banned-user-list li {
+            background-color: #444;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
 
-    <header>
-        <h1>🔒 Panneau d'Administration Akatsudo</h1>
-        <button class="logout-btn" onclick="logoutAdmin()">Déconnexion</button>
-    </header>
+    <div class="container">
+        <h1>Administration Radio Akatsudo</h1>
+        
+        <div id="current-track-info">
+            <img id="admin-current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23555'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='30' fill='%23ccc'>🎧</text></svg>" alt="Cover" />
+            <div>
+                <strong>En cours : </strong> <span id="admin-current-title">--</span>
+                <br>
+                <strong>Par : </strong> <span id="admin-current-pseudo">--</span>
+            </div>
+        </div>
 
-    <div id="admin-content">
-        <h3>File d'Attente (Détails)</h3>
-        <input type="text" id="admin-search" placeholder="Rechercher Pseudo ou Titre..." onkeyup="updateAdminPanel()">
-        <div id="admin-queue-list">
-            <p>Chargement de la file...</p>
+        <div class="tabs">
+            <button class="active" onclick="showTab('queue-tab')">File d'Attente</button>
+            <button onclick="showTab('users-tab')">Gestion Utilisateurs</button>
+        </div>
+
+        <div id="queue-tab" class="tab-content">
+            <h2>File d'Attente des Musiques</h2>
+            <table id="queue-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Titre</th>
+                        <th>Pseudo</th>
+                        <th>Email</th>
+                        <th>Début/Fin</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
         </div>
         
-        <h3>Utilisateurs Bloqués</h3>
-        <div id="banned-users-list">
-            <p>Chargement des utilisateurs bloqués...</p>
+        <div id="users-tab" class="tab-content" style="display: none;">
+            <h2>Liste des Contributeurs</h2>
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Pseudo</th>
+                        <th>Statut</th>
+                        <th>Soumissions</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+            
+            <h2 style="margin-top: 30px;">Utilisateurs Bannis</h2>
+            <ul id="banned-list" class="banned-user-list">
+                </ul>
         </div>
+        
+        <button class="btn btn-logout" onclick="logout()">Déconnexion</button>
     </div>
 
-
     <script>
-        const ADMIN_QUEUE_URL = '/admin/queue';
-        const ADMIN_BAN_URL = '/admin/ban';
-        const ADMIN_UNBAN_URL = '/admin/unban';
-        const ADMIN_DELETE_URL = '/admin/delete';
-        const ADMIN_TOKEN_KEY = 'adminToken'; 
+        const ADMIN_TOKEN_KEY = 'adminToken';
+        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev'; 
+        const ADMIN_DATA_URL = NGROK_BASE_URL + '/api/admin/data';
+        const DELETE_URL = NGROK_BASE_URL + '/api/admin/delete-track';
+        const BAN_URL = NGROK_BASE_URL + '/api/admin/ban';
+        const UNBAN_URL = NGROK_BASE_URL + '/api/admin/unban';
 
-        // --- Vérification d'Accès ---
-        const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-        if (!token) {
-            // Pas de jeton, redirection forcée vers la page de connexion
-            alert("Veuillez vous connecter pour accéder au panneau d'administration.");
+        // --- Vérification de l'authentification ---
+        const ADMIN_TOKEN = localStorage.getItem(ADMIN_TOKEN_KEY);
+        if (!ADMIN_TOKEN) {
             window.location.href = 'index.html';
         }
-        
-        // Fonction utilitaire pour ajouter le jeton aux Headers
-        function getAdminHeaders() {
-            return {
-                'Content-Type': 'application/json',
-                'X-Admin-Token': token
-            };
-        }
 
-        function logoutAdmin() {
+        // --- Fonctions utilitaires ---
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelectorAll('.tabs button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.tabs button[onclick*="${tabId}"]`).classList.add('active');
+        }
+        
+        function logout() {
             localStorage.removeItem(ADMIN_TOKEN_KEY);
             window.location.href = 'index.html';
         }
 
-        // --- FONCTIONS ADMIN (similaires à la version précédente, mais autonomes) ---
-        
-        async function updateAdminPanel() {
+        // --- Rendu des Données ---
+        async function fetchAndRenderData() {
             try {
-                const response = await fetch(ADMIN_QUEUE_URL, {
-                    headers: getAdminHeaders()
+                const response = await fetch(ADMIN_DATA_URL, {
+                    // Les headers d'autorisation sont ici, mais la vérification est côté server.js
+                    headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` } 
                 });
+                if (!response.ok) throw new Error("Accès refusé ou erreur serveur.");
 
-                if (response.status === 401) {
-                    // Jeton invalide ou expiré, déconnexion
-                    alert("Session Admin expirée. Veuillez vous reconnecter.");
-                    logoutAdmin(); 
-                    return;
-                }
-
-                const { queue, bannedIps } = await response.json();
+                const data = await response.json();
                 
-                const queueListDiv = document.getElementById('admin-queue-list');
-                const bannedListDiv = document.getElementById('banned-users-list');
-                const searchInput = document.getElementById('admin-search').value.toLowerCase();
-                
-                queueListDiv.innerHTML = '';
-                bannedListDiv.innerHTML = '';
-
-                // Affichage de la file d'attente
-                const filteredQueue = queue.filter(track => 
-                    track.pseudo.toLowerCase().includes(searchInput) || 
-                    track.title.toLowerCase().includes(searchInput)
-                );
-                
-                // ... (Le reste de la logique d'affichage de la file d'attente et des bannis est identique) ...
-                if (filteredQueue.length === 0) {
-                    queueListDiv.innerHTML = '<p>Aucune musique dans la file ou aucun résultat pour la recherche.</p>';
-                } else {
-                    filteredQueue.forEach((track, index) => {
-                        const trackDiv = document.createElement('div');
-                        trackDiv.classList.add('admin-track');
-                        trackDiv.innerHTML = `
-                            <div>
-                                <strong>${index + 1}. ${track.title}</strong><br>
-                                <small>Par: ${track.pseudo} (IP: ${track.ip})</small>
-                            </div>
-                            <div>
-                                <button class="admin-action-btn" onclick="deleteTrack(${track.id})">Supprimer</button>
-                                <button class="admin-action-btn ban" onclick="banUser('${track.ip}')">Bloquer IP</button>
-                            </div>
-                        `;
-                        queueListDiv.appendChild(trackDiv);
-                    });
-                }
-                
-                // Affichage des utilisateurs bloqués
-                const ips = Object.keys(bannedIps);
-                if (ips.length === 0) {
-                    bannedListDiv.innerHTML = '<p>Aucun utilisateur bloqué.</p>';
-                } else {
-                    ips.forEach(ip => {
-                        const banDiv = document.createElement('div');
-                        banDiv.classList.add('admin-track');
-                        banDiv.innerHTML = `
-                            <div>
-                                <strong>IP : ${ip}</strong>
-                            </div>
-                            <div>
-                                <button class="admin-action-btn" onclick="unbanUser('${ip}')">Débloquer</button>
-                            </div>
-                        `;
-                        bannedListDiv.appendChild(banDiv);
-                    });
-                }
-
-
+                renderCurrentTrack(data.current);
+                renderQueue(data.queue);
+                renderUsers(data.users, data.bannedUsers);
             } catch (error) {
-                console.error("Erreur de récupération des données admin :", error);
-            }
-        }
-        
-        async function deleteTrack(id) {
-            if (confirm('Êtes-vous sûr de vouloir supprimer cette musique ?')) {
-                const response = await fetch(ADMIN_DELETE_URL, {
-                    method: 'POST',
-                    headers: getAdminHeaders(),
-                    body: JSON.stringify({ id: id })
-                });
-                if (response.ok) updateAdminPanel();
-                else alert("Erreur de suppression. Jeton expiré ou erreur serveur.");
+                console.error('Erreur de chargement des données admin:', error);
+                alert(`Erreur: Impossible de charger les données du serveur. (${error.message})`);
+                // En cas d'erreur critique (token invalide), déconnecter
+                if (error.message.includes("Accès refusé")) logout(); 
             }
         }
 
-        async function banUser(ip) {
-            if (confirm(`Êtes-vous sûr de vouloir bloquer l'IP ${ip} ?`)) {
-                const response = await fetch(ADMIN_BAN_URL, {
-                    method: 'POST',
-                    headers: getAdminHeaders(),
-                    body: JSON.stringify({ ip: ip })
-                });
-                if (response.ok) updateAdminPanel();
-                else alert("Erreur de blocage. Jeton expiré ou erreur serveur.");
-            }
-        }
-        
-        async function unbanUser(ip) {
-            if (confirm(`Êtes-vous sûr de vouloir débloquer l'IP ${ip} ?`)) {
-                const response = await fetch(ADMIN_UNBAN_URL, {
-                    method: 'POST',
-                    headers: getAdminHeaders(),
-                    body: JSON.stringify({ ip: ip })
-                });
-                if (response.ok) updateAdminPanel();
-                else alert("Erreur de déblocage. Jeton expiré ou erreur serveur.");
+        function renderCurrentTrack(track) {
+            const titleEl = document.getElementById('admin-current-title');
+            const pseudoEl = document.getElementById('admin-current-pseudo');
+            const coverEl = document.getElementById('admin-current-cover');
+            
+            if (track) {
+                titleEl.textContent = track.title;
+                pseudoEl.textContent = track.pseudo;
+                coverEl.src = track.coverUrl || coverEl.src;
+            } else {
+                titleEl.textContent = 'AUCUNE MUSIQUE EN COURS';
+                pseudoEl.textContent = '---';
+                coverEl.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#555"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="30" fill="#ccc">🎧</text></svg>';
             }
         }
 
-        // --- INITIALISATION ---
+        function renderQueue(queue) {
+            const tbody = document.querySelector('#queue-table tbody');
+            tbody.innerHTML = ''; 
+
+            queue.forEach((track, index) => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${track.title}</td>
+                    <td>${track.pseudo}</td>
+                    <td>${track.email || 'N/A'}</td>
+                    <td>${track.startTime}s - ${track.endTime}s</td>
+                    <td>
+                        <button class="btn btn-delete" onclick="deleteTrack(${track.id})">Supprimer</button>
+                    </td>
+                `;
+            });
+        }
+
+        function renderUsers(users, bannedUsers) {
+            const tbody = document.querySelector('#users-table tbody');
+            tbody.innerHTML = '';
+            
+            // Afficher tous les contributeurs enregistrés dans db.users
+            users.forEach(user => {
+                const isBanned = bannedUsers.includes(user.pseudo.toLowerCase());
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${user.pseudo}</td>
+                    <td>${isBanned ? '<span class="banned-status">Banni</span>' : 'Actif'}</td>
+                    <td>${user.submissions.length}</td>
+                    <td>
+                        ${isBanned 
+                            ? `<button class="btn btn-unban" onclick="toggleBan('${user.pseudo}', false)">Débloquer</button>`
+                            : `<button class="btn btn-ban" onclick="toggleBan('${user.pseudo}', true)">Bannir</button>`
+                        }
+                    </td>
+                `;
+            });
+
+            // Afficher la liste des bannis séparément (ceux qui n'ont pas forcément soumis, juste bannis)
+            const bannedListEl = document.getElementById('banned-list');
+            bannedListEl.innerHTML = '';
+            bannedUsers.forEach(pseudo => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span class="banned-status">${pseudo}</span> 
+                    <button class="btn btn-unban" style="float: right;" onclick="toggleBan('${pseudo}', false)">Débloquer</button>
+                `;
+                bannedListEl.appendChild(li);
+            });
+        }
+
+        // --- Actions Admin ---
+        async function deleteTrack(trackId) {
+            if (!confirm(`Confirmez-vous la suppression de la musique ID ${trackId} ?`)) return;
+            
+            try {
+                await fetch(DELETE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: trackId })
+                });
+                alert('Musique supprimée.');
+                fetchAndRenderData(); // Recharger les données
+            } catch (error) {
+                alert('Échec de la suppression.');
+            }
+        }
+
+        async function toggleBan(pseudo, shouldBan) {
+            if (!confirm(`Confirmez-vous l'action ${shouldBan ? 'Bannir' : 'Débloquer'} pour ${pseudo} ?`)) return;
+
+            const url = shouldBan ? BAN_URL : UNBAN_URL;
+            
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pseudo: pseudo })
+                });
+                alert(`Utilisateur ${pseudo} ${shouldBan ? 'banni' : 'débloqué'} !`);
+                fetchAndRenderData(); 
+            } catch (error) {
+                alert(`Échec de l'action.`);
+            }
+        }
+        
+        // --- Démarrage ---
         window.onload = () => {
-            // Ne charge l'interface que si le jeton est présent
-            if (token) {
-                updateAdminPanel();
-                // Mise à jour automatique
-                setInterval(updateAdminPanel, 10000); 
-            }
+            fetchAndRenderData();
+            // Rafraîchir toutes les 5 secondes
+            setInterval(fetchAndRenderData, 5000); 
         };
     </script>
 </body>
