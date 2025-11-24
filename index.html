@@ -31,7 +31,7 @@
             padding-bottom: 10px;
         }
 
-        h1 { color: var(--accent-green); }
+        h1 { color: var(--accent-green); cursor: pointer; }
         h2 { border-bottom: 1px solid var(--bg-medium); padding-bottom: 5px; margin-bottom: 15px; }
 
         /* Conteneurs Principaux */
@@ -43,7 +43,7 @@
             margin-bottom: 30px; 
         }
 
-        #submission-form { 
+        #submission-form-container { /* Renommé pour contenir le form ou le login */
             background-color: var(--bg-medium); 
             padding: 20px; 
             border-radius: 10px; 
@@ -111,19 +111,10 @@
             background-color: #444;
             border-style: solid;
         }
-
-        /* --- Admin Panel Styles --- */
-        #admin-panel {
-            margin-top: 40px;
-            background-color: #1a1a1a;
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid var(--accent-green);
-            display: none; /* Caché par défaut */
+        
+        #admin-login-form {
+            padding-top: 10px;
         }
-        .admin-track { border-bottom: 1px solid #444; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
-        .admin-action-btn { background-color: var(--error-red); width: auto; padding: 5px 10px; margin-left: 10px; font-size: 14px; }
-        .admin-action-btn.ban { background-color: orange; }
     </style>
 </head>
 <body>
@@ -146,128 +137,141 @@
         <audio id="audio-player" controls preload="auto"></audio>
     </div>
 
-    <div id="submission-form">
-        <h2>Soumettre une Musique</h2>
-        <form id="submit-music">
-            <input type="text" id="pseudo" name="pseudo" placeholder="Votre Pseudo Akatsudo" required>
-            <input type="email" id="email" name="email" placeholder="Votre Email (Optionnel)">
-            
-            <p>Choisissez entre un lien ou un fichier :</p>
-            <input type="text" id="url" name="url" placeholder="Lien Musique (YouTube, Spotify, etc.)">
-            
-            <input type="file" id="audioFile" name="audioFile" accept=".mp3,.wav,.ogg" style="display: none;">
-
-            <div id="drop-zone">
-                Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById('audioFile').click(); return false;">cliquez pour choisir</a>.
-            </div>
-            
-            <p>Début/Fin (Optionnel, en secondes, max 270s) :</p>
-            <input type="number" id="start_time" name="start_time" placeholder="Début (ex: 30)">
-            <input type="number" id="end_time" name="end_time" placeholder="Fin (laissez vide pour max 4m30s)">
-
-            <button type="submit" id="submit-button">Ajouter à la File</button>
-            <p id="countdown-message" style="display: none;"></p>
-        </form>
-    </div>
-
-    <div id="admin-panel">
-        <h2>🔒 Panneau d'Administration</h2>
-        <div id="admin-login">
-            <input type="password" id="admin-password" placeholder="Mot de passe admin">
-            <input type="checkbox" id="show-password-checkbox"> <label for="show-password-checkbox">Afficher</label>
-            <button onclick="loginAdmin()">Accéder</button>
-            <p id="admin-error" style="color: var(--error-red); display: none; margin-top: 10px;">Mot de passe incorrect.</p>
-        </div>
+    <div id="submission-form-container">
         
-        <div id="admin-content" style="display: none;">
-            <h3>File d'Attente (Détails)</h3>
-            <input type="text" id="admin-search" placeholder="Rechercher Pseudo ou Titre...">
-            <div id="admin-queue-list">
-                <p>Chargement de la file...</p>
-            </div>
-            
-            <h3>Utilisateurs Bloqués</h3>
-            <div id="banned-users-list">
-                 <p>Aucun utilisateur bloqué.</p>
-            </div>
-        </div>
-    </div>
+        <div id="submission-form-content">
+             <h2>Soumettre une Musique</h2>
+            <form id="submit-music">
+                <input type="text" id="pseudo" name="pseudo" placeholder="Votre Pseudo Akatsudo" required>
+                <input type="email" id="email" name="email" placeholder="Votre Email (Optionnel)">
+                
+                <p>Choisissez entre un lien ou un fichier :</p>
+                <input type="text" id="url" name="url" placeholder="Lien Musique (YouTube, Spotify, etc.)">
+                
+                <input type="file" id="audioFile" name="audioFile" accept=".mp3,.wav,.ogg" style="display: none;">
 
+                <div id="drop-zone">
+                    Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById('audioFile').click(); return false;">cliquez pour choisir</a>.
+                </div>
+                
+                <p>Début/Fin (Optionnel, en secondes, max 270s) :</p>
+                <input type="number" id="start_time" name="start_time" placeholder="Début (ex: 30)">
+                <input type="number" id="end_time" name="end_time" placeholder="Fin (laissez vide pour max 4m30s)">
+
+                <button type="submit" id="submit-button">Ajouter à la File</button>
+                <p id="countdown-message" style="display: none;"></p>
+            </form>
+        </div>
+       
+    </div>
 
     <script>
-        // --- Constantes et Configuration ---
         const API_URL = '/submit';
         const QUEUE_URL = '/api/queue';
         const NEXT_URL = '/api/next';
-        const ADMIN_QUEUE_URL = '/admin/queue';
-        const ADMIN_BAN_URL = '/admin/ban';
-        const ADMIN_UNBAN_URL = '/admin/unban';
-        const ADMIN_DELETE_URL = '/admin/delete';
+        const ADMIN_LOGIN_URL = '/admin/login';
+        
         const AUDIO_PLAYER = document.getElementById('audio-player');
         
-        const ADMIN_PASSWORD = "Admin2013!";
         const COOLDOWN_KEY = 'lastSubmissionTime';
+        const ADMIN_TOKEN_KEY = 'adminToken';
         const COOLDOWN_MS = 5 * 60 * 1000; 
         
         let currentTrack = null;
-        let adminLoggedIn = false;
         let adminClickCount = 0;
-        
+        let isSubmissionForm = true; // Pour savoir si on affiche le formulaire ou le login admin
+
         // --- ADMIN LOGIN (Trigger) ---
         document.getElementById('radio-title-trigger').addEventListener('click', () => {
+            if (!isSubmissionForm) return; // Si le panneau admin est déjà affiché, ignorer
+
             adminClickCount++;
             if (adminClickCount >= 6) {
-                document.getElementById('admin-panel').style.display = 'block';
+                // Remplacer le contenu du formulaire par le formulaire de connexion admin
+                const container = document.getElementById('submission-form-container');
+                container.innerHTML = `
+                    <div id="admin-login-form">
+                        <h2>🔒 Connexion Administrateur</h2>
+                        <input type="password" id="admin-password" placeholder="Mot de passe admin">
+                        <input type="checkbox" id="show-password-checkbox"> <label for="show-password-checkbox">Afficher</label>
+                        <button id="admin-access-btn" onclick="loginAdmin()">Accéder</button>
+                        <p id="admin-error" style="color: var(--error-red); display: none; margin-top: 10px;">Mot de passe incorrect.</p>
+                    </div>
+                `;
+                document.getElementById('show-password-checkbox').addEventListener('change', (e) => {
+                    const passInput = document.getElementById('admin-password');
+                    passInput.type = e.target.checked ? 'text' : 'password';
+                });
+
+                isSubmissionForm = false;
                 adminClickCount = 0; // Reset
             }
-        });
-        
-        document.getElementById('show-password-checkbox').addEventListener('change', (e) => {
-            const passInput = document.getElementById('admin-password');
-            passInput.type = e.target.checked ? 'text' : 'password';
         });
 
         async function loginAdmin() {
             const password = document.getElementById('admin-password').value;
+            const accessButton = document.getElementById('admin-access-btn');
             const errorMsg = document.getElementById('admin-error');
             
-            if (password === ADMIN_PASSWORD) {
-                adminLoggedIn = true;
-                document.getElementById('admin-login').style.display = 'none';
-                document.getElementById('admin-content').style.display = 'block';
-                await updateAdminPanel();
-            } else {
+            accessButton.disabled = true;
+            accessButton.textContent = 'Vérification...';
+            errorMsg.style.display = 'none';
+
+            try {
+                const response = await fetch(ADMIN_LOGIN_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: password })
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.token) {
+                    // Stocke le jeton renvoyé par le serveur
+                    localStorage.setItem(ADMIN_TOKEN_KEY, result.token);
+                    
+                    // Redirige vers la page admin protégée
+                    window.location.href = 'admin.html'; 
+                } else {
+                    errorMsg.textContent = result.message || 'Mot de passe incorrect.';
+                    errorMsg.style.display = 'block';
+                }
+            } catch (error) {
+                errorMsg.textContent = 'Erreur de connexion au serveur.';
                 errorMsg.style.display = 'block';
-                setTimeout(() => errorMsg.style.display = 'none', 3000);
+            } finally {
+                accessButton.disabled = false;
+                accessButton.textContent = 'Accéder';
             }
         }
         
         // --- DRAG AND DROP ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('audioFile');
+        
+        if (dropZone && fileInput) { // Vérifie que les éléments existent (car ils sont supprimés si on va en admin)
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
 
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    fileInput.files = files; 
+                    dropZone.innerHTML = `Fichier sélectionné : <strong>${files[0].name}</strong>. Glissez un autre fichier pour le remplacer.`;
+                }
+            });
+        }
 
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            
-            const files = e.dataTransfer.files;
-            if (files.length) {
-                fileInput.files = files; // Transfère le fichier au champ input
-                // Mettre à jour l'affichage
-                dropZone.innerHTML = `Fichier sélectionné : <strong>${files[0].name}</strong>. Glissez un autre fichier pour le remplacer.`;
-            }
-        });
-
-        // --- Fonctions de Cooldown et Soumission (Similaires à la version précédente) ---
+        // --- Fonctions de Cooldown et Soumission ---
         
         function setCooldown() {
             localStorage.setItem(COOLDOWN_KEY, Date.now());
@@ -281,6 +285,8 @@
             const submitButton = document.getElementById('submit-button');
             const countdownMessage = document.getElementById('countdown-message');
             
+            if (!submitButton) return; // Sort si on est dans le panneau de login admin
+
             if (timeElapsed < COOLDOWN_MS) {
                 const remaining = Math.ceil((COOLDOWN_MS - timeElapsed) / 1000);
                 submitButton.disabled = true;
@@ -296,53 +302,52 @@
             }
         }
 
-        document.getElementById('submit-music').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const submitButton = document.getElementById('submit-button');
-            submitButton.disabled = true;
-            submitButton.textContent = 'Envoi...';
+        if (document.getElementById('submit-music')) { // Vérifie que le formulaire est présent
+            document.getElementById('submit-music').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const submitButton = document.getElementById('submit-button');
+                submitButton.disabled = true;
+                submitButton.textContent = 'Envoi...';
 
-            const form = e.target;
-            const formData = new FormData();
-            
-            // ... (Ajout des champs à formData, comme dans la version 1) ...
-            formData.append('pseudo', document.getElementById('pseudo').value);
-            formData.append('email', document.getElementById('email').value);
-            formData.append('url', document.getElementById('url').value);
-            formData.append('start_time', document.getElementById('start_time').value);
-            formData.append('end_time', document.getElementById('end_time').value);
+                const form = e.target;
+                const formData = new FormData();
+                
+                formData.append('pseudo', document.getElementById('pseudo').value);
+                formData.append('email', document.getElementById('email').value);
+                formData.append('url', document.getElementById('url').value);
+                formData.append('start_time', document.getElementById('start_time').value);
+                formData.append('end_time', document.getElementById('end_time').value);
 
-            const fileInput = document.getElementById('audioFile');
-            if (fileInput.files.length > 0) {
-                formData.append('audioFile', fileInput.files[0]);
-            }
-            
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert('Succès : ' + result.message);
-                    form.reset(); 
-                    // Rétablir le texte de la drop zone
-                    dropZone.innerHTML = 'Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById(\'audioFile\').click(); return false;">cliquez pour choisir</a>.';
-                    setCooldown(); 
-                    updatePlayer(); // Pour que le client lance la première musique si la file était vide
-                    if (adminLoggedIn) updateAdminPanel();
-                } else {
-                    alert('Erreur : ' + result.message);
+                const fileInput = document.getElementById('audioFile');
+                if (fileInput.files.length > 0) {
+                    formData.append('audioFile', fileInput.files[0]);
                 }
-            } catch (error) {
-                alert('Erreur réseau ou interne.');
-                console.error('Erreur de soumission :', error);
-            } finally {
-                 checkCooldown(); // Vérification finale du cooldown pour réactiver si possible
-            }
-        });
+                
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Succès : ' + result.message);
+                        form.reset(); 
+                        dropZone.innerHTML = 'Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById(\'audioFile\').click(); return false;">cliquez pour choisir</a>.';
+                        setCooldown(); 
+                        updatePlayer(); 
+                    } else {
+                        alert('Erreur : ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Erreur réseau ou interne.');
+                    console.error('Erreur de soumission :', error);
+                } finally {
+                     checkCooldown();
+                }
+            });
+        }
         
         // --- LOGIQUE DU LECTEUR ET DU COUPE-MUSIQUE ---
         
@@ -353,13 +358,12 @@
 
             if (currentTrack && currentTrack.endTime && AUDIO_PLAYER.currentTime >= currentTrack.endTime) {
                 AUDIO_PLAYER.pause();
-                // Notifier le serveur de passer à la musique suivante (API POST /api/next)
+                // Notifier le serveur de passer à la musique suivante
                 fetch(NEXT_URL, { method: 'POST' }).then(() => updatePlayer());
             }
         });
 
         AUDIO_PLAYER.addEventListener('ended', () => {
-            // Si la musique arrive à sa fin naturelle, on passe
             fetch(NEXT_URL, { method: 'POST' }).then(() => updatePlayer());
         });
 
@@ -368,6 +372,7 @@
             document.getElementById('current-title').textContent = track.title;
             document.getElementById('current-pseudo').textContent = track.pseudo;
             document.getElementById('current-duration').textContent = '0s';
+            // Utiliser une image par défaut si la pochette est manquante
             document.getElementById('current-cover').src = track.coverUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#555"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="30" fill="#ccc">🎧</text></svg>';
             
             AUDIO_PLAYER.src = track.path; 
@@ -384,11 +389,9 @@
                 const response = await fetch(QUEUE_URL);
                 const data = await response.json();
                 
-                // Mettre à jour le lecteur UNIQUEMENT si la piste a changé
                 if (data.current && (!currentTrack || data.current.id !== currentTrack.id)) {
                     playTrack(data.current);
                 } else if (!data.current) {
-                    // Si la file est vide
                     document.getElementById('current-title').textContent = 'File d\'attente vide. Proposez la première musique !';
                     document.getElementById('current-pseudo').textContent = '--';
                     document.getElementById('current-duration').textContent = '0s';
@@ -399,111 +402,11 @@
             }
         }
         
-        // --- FONCTIONS ADMIN ---
-        async function updateAdminPanel() {
-            if (!adminLoggedIn) return;
-
-            // 1. Récupérer la file d'attente détaillée et les utilisateurs bannis
-            const response = await fetch(ADMIN_QUEUE_URL);
-            const { queue, bannedIps } = await response.json();
-            
-            const queueListDiv = document.getElementById('admin-queue-list');
-            const bannedListDiv = document.getElementById('banned-users-list');
-            const searchInput = document.getElementById('admin-search').value.toLowerCase();
-            
-            queueListDiv.innerHTML = '';
-            bannedListDiv.innerHTML = '';
-
-            // Affichage de la file d'attente
-            const filteredQueue = queue.filter(track => 
-                track.pseudo.toLowerCase().includes(searchInput) || 
-                track.title.toLowerCase().includes(searchInput)
-            );
-
-            if (filteredQueue.length === 0) {
-                queueListDiv.innerHTML = '<p>Aucune musique dans la file ou aucun résultat pour la recherche.</p>';
-            } else {
-                filteredQueue.forEach((track, index) => {
-                    const trackDiv = document.createElement('div');
-                    trackDiv.classList.add('admin-track');
-                    trackDiv.innerHTML = `
-                        <div>
-                            <strong>${index + 1}. ${track.title}</strong><br>
-                            <small>Par: ${track.pseudo} (IP: ${track.ip})</small>
-                        </div>
-                        <div>
-                            <button class="admin-action-btn" onclick="deleteTrack(${track.id})">Supprimer</button>
-                            <button class="admin-action-btn ban" onclick="banUser('${track.ip}')">Bloquer IP</button>
-                        </div>
-                    `;
-                    queueListDiv.appendChild(trackDiv);
-                });
-            }
-            
-            // Affichage des utilisateurs bloqués
-            const ips = Object.keys(bannedIps);
-            if (ips.length === 0) {
-                bannedListDiv.innerHTML = '<p>Aucun utilisateur bloqué.</p>';
-            } else {
-                ips.forEach(ip => {
-                    const banDiv = document.createElement('div');
-                    banDiv.classList.add('admin-track');
-                    banDiv.innerHTML = `
-                        <div>
-                            <strong>IP : ${ip}</strong>
-                        </div>
-                        <div>
-                            <button class="admin-action-btn" onclick="unbanUser('${ip}')">Débloquer</button>
-                        </div>
-                    `;
-                    bannedListDiv.appendChild(banDiv);
-                });
-            }
-        }
-        
-        // Fonctions d'action Admin (appellent les API du serveur)
-        async function deleteTrack(id) {
-            if (confirm('Êtes-vous sûr de vouloir supprimer cette musique ?')) {
-                await fetch(ADMIN_DELETE_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, code: ADMIN_PASSWORD })
-                });
-                updateAdminPanel();
-            }
-        }
-
-        async function banUser(ip) {
-            if (confirm(`Êtes-vous sûr de vouloir bloquer l'IP ${ip} ?`)) {
-                await fetch(ADMIN_BAN_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ip, code: ADMIN_PASSWORD })
-                });
-                updateAdminPanel();
-            }
-        }
-        
-        async function unbanUser(ip) {
-            if (confirm(`Êtes-vous sûr de vouloir débloquer l'IP ${ip} ?`)) {
-                await fetch(ADMIN_UNBAN_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ip, code: ADMIN_PASSWORD })
-                });
-                updateAdminPanel();
-            }
-        }
-        
-        // Recherche Admin
-        document.getElementById('admin-search').addEventListener('keyup', updateAdminPanel);
-
         // --- INITIALISATION ---
         window.onload = () => {
             checkCooldown(); 
             updatePlayer(); 
-            setInterval(updatePlayer, 5000); // Mise à jour rapide du player (5s)
-            setInterval(() => { if (adminLoggedIn) updateAdminPanel(); }, 10000); // Mise à jour moins fréquente de l'admin
+            setInterval(updatePlayer, 5000); 
         };
     </script>
 </body>
