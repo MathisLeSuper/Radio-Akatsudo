@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ma Radio Collaborative</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f4; }
+        header { text-align: center; margin-bottom: 20px; }
+        .player-info { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
+        .queue-submission { display: flex; justify-content: space-between; gap: 20px; }
+        #submission-form { flex: 1; background-color: #e9e9e9; padding: 20px; border-radius: 8px; }
+        #queue-list { flex: 1; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); }
+        input[type="text"], input[type="email"], input[type="file"], input[type="number"] { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #333; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button:hover:not(:disabled) { background-color: #555; }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        .track { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .current-cover { width: 100px; height: 100px; float: left; margin-right: 15px; object-fit: cover; border-radius: 4px; }
+        .track-details { overflow: hidden; }
+        #countdown-message { color: red; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎧 Radio Collaborative</h1>
+        <p>Proposez votre musique ! (Max 4m30s | 1 soumission toutes les 5 min)</p>
+    </header>
+
+    <div class="player-info">
+        <h2>En cours de lecture</h2>
+        <div id="current-track-info">
+            <p><strong>Titre :</strong> <span id="current-title">--</span></p>
+            <p><strong>Proposé par :</strong> <span id="current-pseudo">--</span></p>
+            <p><strong>Source :</strong> <span id="current-source">--</span></p>
+        </div>
+        <audio id="audio-player" controls preload="auto" style="width: 100%; margin-top: 15px;"></audio>
+    </div>
+
+    <div class="queue-submission">
+        <div id="submission-form">
+            <h2>Soumettre une Musique</h2>
+            <form id="submit-music">
+                <input type="text" id="pseudo" name="pseudo" placeholder="Votre Pseudo" required>
+                <input type="email" id="email" name="email" placeholder="Votre Email (Optionnel)">
+                
+                <p>Choisissez entre un lien ou un fichier :</p>
+                <input type="text" id="url" name="url" placeholder="Lien Musique (YouTube, Spotify...)">
+                <input type="file" id="audioFile" name="audioFile" accept=".mp3,.wav,.ogg">
+                
+                <p>Début/Fin (Optionnel, en secondes) :</p>
+                <input type="number" id="start_time" name="start_time" placeholder="Début (ex: 30)">
+                <input type="number" id="end_time" name="end_time" placeholder="Fin (ex: 270)">
+
+                <button type="submit" id="submit-button">Ajouter à la File</button>
+                <p id="countdown-message" style="display: none;"></p>
+            </form>
+        </div>
+
+        <div id="queue-list">
+            <h2>File d'Attente</h2>
+            <div id="next-tracks">
+                <p>La file d'attente est vide.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/submit';
+        const QUEUE_URL = '/api/queue';
+        const NEXT_URL = '/api/next';
+        const AUDIO_PLAYER = document.getElementById('audio-player');
+        const SUBMIT_BUTTON = document.getElementById('submit-button');
+        const COUNTDOWN_MESSAGE = document.getElementById('countdown-message');
+        
+        // --- GESTION DU COOLDOWN (Côté Client - Non Sécurisé, juste pour l'UX) ---
+        const COOLDOWN_KEY = 'lastSubmissionTime';
+        const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
+        function setCooldown() {
+            localStorage.setItem(COOLDOWN_KEY, Date.now());
+            checkCooldown();
+        }
+
+        function checkCooldown() {
+            const lastTime = parseInt(localStorage.getItem(COOLDOWN_KEY) || 0);
+            const now = Date.now();
+            const timeElapsed = now - lastTime;
+            
+            if (timeElapsed < COOLDOWN_MS) {
+                const remaining = Math.ceil((COOLDOWN_MS - timeElapsed) / 1000);
+                SUBMIT_BUTTON.disabled = true;
+                SUBMIT_BUTTON.textContent = 'En attente...';
+                COUNTDOWN_MESSAGE.style.display = 'block';
+                COUNTDOWN_MESSAGE.textContent = `Prochaine soumission dans ${remaining} secondes.`;
+                
+                // Mettre à jour le compte à rebours toutes les secondes
+                setTimeout(checkCooldown, 1000); 
+            } else {
+                SUBMIT_BUTTON.disabled = false;
+                SUBMIT_BUTTON.textContent = 'Ajouter à la File';
+                COUNTDOWN_MESSAGE.style.display = 'none';
+            }
+        }
+        
+        // --- LECTURE ET GESTION DU LECTEUR ---
+        let currentTrack = null;
+
+        function playTrack(track) {
+            currentTrack = track;
+            
+            const title = document.getElementById('current-title');
+            const pseudo = document.getElementById('current-pseudo');
+            const source = document.getElementById('current-source');
+            
+            title.textContent = track.title;
+            pseudo.textContent = track.pseudo;
+            source.textContent = track.source;
+            
+            // Les fichiers locaux et les liens directs doivent être servis par le serveur
+            AUDIO_PLAYER.src = track.path; 
+            
+            // Gérer le début
+            if (track.startTime > 0) {
+                AUDIO_PLAYER.currentTime = track.startTime;
+            }
+
+            AUDIO_PLAYER.play().catch(e => console.error("Erreur de lecture :", e));
+        }
+
+        // Gérer la fin de lecture ou la limite de 4m30s
+        AUDIO_PLAYER.addEventListener('timeupdate', () => {
+            if (currentTrack && currentTrack.endTime && AUDIO_PLAYER.currentTime >= currentTrack.endTime) {
+                AUDIO_PLAYER.pause();
+                // Notifier le serveur de passer à la musique suivante
+                fetch(NEXT_URL, { method: 'POST' })
+                    .then(() => updateQueue())
+                    .catch(e => console.error("Erreur passage à la suivante:", e));
+            }
+        });
+
+        AUDIO_PLAYER.addEventListener('ended', () => {
+             // Si la musique arrive à sa fin naturelle (et non à l'endTime), on passe
+            fetch(NEXT_URL, { method: 'POST' })
+                .then(() => updateQueue())
+                .catch(e => console.error("Erreur passage à la suivante:", e));
+        });
+
+        // --- GESTION DE LA FILE D'ATTENTE ---
+        async function updateQueue() {
+            try {
+                const response = await fetch(QUEUE_URL);
+                const data = await response.json();
+                
+                // Mettre à jour le lecteur si la piste a changé ou si elle n'est pas encore lancée
+                if (data.current && (!currentTrack || data.current.id !== currentTrack.id)) {
+                    playTrack(data.current);
+                }
+                
+                // Afficher la file d'attente
+                const nextTracksDiv = document.getElementById('next-tracks');
+                nextTracksDiv.innerHTML = ''; 
+                
+                if (data.next.length === 0) {
+                    nextTracksDiv.innerHTML = '<p>La file d\'attente est vide.</p>';
+                } else {
+                    data.next.forEach(track => {
+                        const trackDiv = document.createElement('div');
+                        trackDiv.classList.add('track');
+                        trackDiv.innerHTML = `
+                            <strong>${track.title}</strong><br>
+                            <small>Proposé par: ${track.pseudo}</small>
+                        `;
+                        nextTracksDiv.appendChild(trackDiv);
+                    });
+                }
+            } catch (error) {
+                console.error("Erreur lors de la récupération de la file d'attente :", error);
+            }
+        }
+
+        // --- GESTION DU FORMULAIRE DE SOUMISSION ---
+        document.getElementById('submit-music').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            SUBMIT_BUTTON.disabled = true;
+            SUBMIT_BUTTON.textContent = 'Envoi...';
+
+            const form = e.target;
+            const formData = new FormData();
+            
+            // Ajouter les champs de texte
+            formData.append('pseudo', document.getElementById('pseudo').value);
+            formData.append('email', document.getElementById('email').value);
+            formData.append('url', document.getElementById('url').value);
+            formData.append('start_time', document.getElementById('start_time').value);
+            formData.append('end_time', document.getElementById('end_time').value);
+
+            // Ajouter le fichier (si sélectionné)
+            const fileInput = document.getElementById('audioFile');
+            if (fileInput.files.length > 0) {
+                formData.append('audioFile', fileInput.files[0]);
+            }
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData // FormData gère l'envoi de fichiers et de données
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Succès : ' + result.message);
+                    form.reset(); // Vider le formulaire
+                    setCooldown(); // Démarre le cooldown
+                    await updateQueue(); // Rafraîchir la liste
+                } else {
+                    alert('Erreur : ' + result.message);
+                }
+            } catch (error) {
+                alert('Erreur réseau ou interne.');
+                console.error('Erreur de soumission :', error);
+            } finally {
+                 // Le bouton est réactivé par checkCooldown si le délai est écoulé
+                if (!localStorage.getItem(COOLDOWN_KEY) || (Date.now() - parseInt(localStorage.getItem(COOLDOWN_KEY))) >= COOLDOWN_MS) {
+                    SUBMIT_BUTTON.disabled = false;
+                    SUBMIT_BUTTON.textContent = 'Ajouter à la File';
+                }
+            }
+        });
+
+        // --- INITIALISATION ---
+        window.onload = () => {
+            checkCooldown(); // Vérifie le cooldown au chargement
+            updateQueue(); // Charge la file d'attente initiale
+            // Rafraîchir la file d'attente toutes les 10 secondes (ou utiliser WebSockets pour plus de réactivité)
+            setInterval(updateQueue, 10000); 
+        };
+    </script>
+</body>
+</html>
