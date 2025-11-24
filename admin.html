@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔒 Admin - Radio Akatsudo</title>
+    <style>
+        /* Copiez ici TOUT le bloc <style> de index.html (sauf les parties non pertinentes si vous voulez) */
+        :root {
+            --bg-dark: #222;
+            --bg-medium: #333;
+            --text-light: #f4f4f4;
+            --accent-green: #4CAF50;
+            --accent-hover: #6BCB77;
+            --error-red: #D32F2F;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background-color: var(--bg-dark); 
+            color: var(--text-light);
+        }
+        
+        header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            border-bottom: 2px solid var(--accent-green); 
+            padding-bottom: 10px;
+        }
+
+        h1 { color: var(--accent-green); }
+        h2 { border-bottom: 1px solid var(--bg-medium); padding-bottom: 5px; margin-bottom: 15px; }
+
+        input[type="text"], input[type="password"] { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            border: 1px solid var(--bg-dark); 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+            background-color: #444;
+            color: var(--text-light);
+        }
+        
+        button { 
+            background-color: var(--accent-green); 
+            color: var(--bg-dark); 
+            font-weight: bold;
+            padding: 12px 20px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            transition: background-color 0.3s, transform 0.1s; 
+            width: auto;
+            margin-top: 10px;
+        }
+        button:hover:not(:disabled) { 
+            background-color: var(--accent-hover); 
+            transform: translateY(-1px);
+        }
+        button:disabled { 
+            background-color: #666; 
+            cursor: not-allowed; 
+        }
+
+        .admin-track { border-bottom: 1px solid #444; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .admin-action-btn { background-color: var(--error-red); width: auto; padding: 5px 10px; margin-left: 10px; font-size: 14px; }
+        .admin-action-btn.ban { background-color: orange; }
+        .logout-btn { background-color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🔒 Panneau d'Administration Akatsudo</h1>
+        <button class="logout-btn" onclick="logoutAdmin()">Déconnexion</button>
+    </header>
+
+    <div id="admin-content">
+        <h3>File d'Attente (Détails)</h3>
+        <input type="text" id="admin-search" placeholder="Rechercher Pseudo ou Titre..." onkeyup="updateAdminPanel()">
+        <div id="admin-queue-list">
+            <p>Chargement de la file...</p>
+        </div>
+        
+        <h3>Utilisateurs Bloqués</h3>
+        <div id="banned-users-list">
+            <p>Chargement des utilisateurs bloqués...</p>
+        </div>
+    </div>
+
+
+    <script>
+        const ADMIN_QUEUE_URL = '/admin/queue';
+        const ADMIN_BAN_URL = '/admin/ban';
+        const ADMIN_UNBAN_URL = '/admin/unban';
+        const ADMIN_DELETE_URL = '/admin/delete';
+        const ADMIN_TOKEN_KEY = 'adminToken'; 
+
+        // --- Vérification d'Accès ---
+        const token = localStorage.getItem(ADMIN_TOKEN_KEY);
+        if (!token) {
+            // Pas de jeton, redirection forcée vers la page de connexion
+            alert("Veuillez vous connecter pour accéder au panneau d'administration.");
+            window.location.href = 'index.html';
+        }
+        
+        // Fonction utilitaire pour ajouter le jeton aux Headers
+        function getAdminHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'X-Admin-Token': token
+            };
+        }
+
+        function logoutAdmin() {
+            localStorage.removeItem(ADMIN_TOKEN_KEY);
+            window.location.href = 'index.html';
+        }
+
+        // --- FONCTIONS ADMIN (similaires à la version précédente, mais autonomes) ---
+        
+        async function updateAdminPanel() {
+            try {
+                const response = await fetch(ADMIN_QUEUE_URL, {
+                    headers: getAdminHeaders()
+                });
+
+                if (response.status === 401) {
+                    // Jeton invalide ou expiré, déconnexion
+                    alert("Session Admin expirée. Veuillez vous reconnecter.");
+                    logoutAdmin(); 
+                    return;
+                }
+
+                const { queue, bannedIps } = await response.json();
+                
+                const queueListDiv = document.getElementById('admin-queue-list');
+                const bannedListDiv = document.getElementById('banned-users-list');
+                const searchInput = document.getElementById('admin-search').value.toLowerCase();
+                
+                queueListDiv.innerHTML = '';
+                bannedListDiv.innerHTML = '';
+
+                // Affichage de la file d'attente
+                const filteredQueue = queue.filter(track => 
+                    track.pseudo.toLowerCase().includes(searchInput) || 
+                    track.title.toLowerCase().includes(searchInput)
+                );
+                
+                // ... (Le reste de la logique d'affichage de la file d'attente et des bannis est identique) ...
+                if (filteredQueue.length === 0) {
+                    queueListDiv.innerHTML = '<p>Aucune musique dans la file ou aucun résultat pour la recherche.</p>';
+                } else {
+                    filteredQueue.forEach((track, index) => {
+                        const trackDiv = document.createElement('div');
+                        trackDiv.classList.add('admin-track');
+                        trackDiv.innerHTML = `
+                            <div>
+                                <strong>${index + 1}. ${track.title}</strong><br>
+                                <small>Par: ${track.pseudo} (IP: ${track.ip})</small>
+                            </div>
+                            <div>
+                                <button class="admin-action-btn" onclick="deleteTrack(${track.id})">Supprimer</button>
+                                <button class="admin-action-btn ban" onclick="banUser('${track.ip}')">Bloquer IP</button>
+                            </div>
+                        `;
+                        queueListDiv.appendChild(trackDiv);
+                    });
+                }
+                
+                // Affichage des utilisateurs bloqués
+                const ips = Object.keys(bannedIps);
+                if (ips.length === 0) {
+                    bannedListDiv.innerHTML = '<p>Aucun utilisateur bloqué.</p>';
+                } else {
+                    ips.forEach(ip => {
+                        const banDiv = document.createElement('div');
+                        banDiv.classList.add('admin-track');
+                        banDiv.innerHTML = `
+                            <div>
+                                <strong>IP : ${ip}</strong>
+                            </div>
+                            <div>
+                                <button class="admin-action-btn" onclick="unbanUser('${ip}')">Débloquer</button>
+                            </div>
+                        `;
+                        bannedListDiv.appendChild(banDiv);
+                    });
+                }
+
+
+            } catch (error) {
+                console.error("Erreur de récupération des données admin :", error);
+            }
+        }
+        
+        async function deleteTrack(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cette musique ?')) {
+                const response = await fetch(ADMIN_DELETE_URL, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ id: id })
+                });
+                if (response.ok) updateAdminPanel();
+                else alert("Erreur de suppression. Jeton expiré ou erreur serveur.");
+            }
+        }
+
+        async function banUser(ip) {
+            if (confirm(`Êtes-vous sûr de vouloir bloquer l'IP ${ip} ?`)) {
+                const response = await fetch(ADMIN_BAN_URL, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ ip: ip })
+                });
+                if (response.ok) updateAdminPanel();
+                else alert("Erreur de blocage. Jeton expiré ou erreur serveur.");
+            }
+        }
+        
+        async function unbanUser(ip) {
+            if (confirm(`Êtes-vous sûr de vouloir débloquer l'IP ${ip} ?`)) {
+                const response = await fetch(ADMIN_UNBAN_URL, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ ip: ip })
+                });
+                if (response.ok) updateAdminPanel();
+                else alert("Erreur de déblocage. Jeton expiré ou erreur serveur.");
+            }
+        }
+
+        // --- INITIALISATION ---
+        window.onload = () => {
+            // Ne charge l'interface que si le jeton est présent
+            if (token) {
+                updateAdminPanel();
+                // Mise à jour automatique
+                setInterval(updateAdminPanel, 10000); 
+            }
+        };
+    </script>
+</body>
+</html>
