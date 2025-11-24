@@ -166,10 +166,13 @@
     </div>
 
     <script>
-        const API_URL = '/submit';
-        const QUEUE_URL = '/api/queue';
-        const NEXT_URL = '/api/next';
-        const ADMIN_LOGIN_URL = '/admin/login';
+        // ⚠️ CORRECTION CRITIQUE : Utiliser l'URL Absolue pour éviter les problèmes de protocole Ngrok
+        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev'; 
+
+        const API_URL = NGROK_BASE_URL + '/submit';
+        const QUEUE_URL = NGROK_BASE_URL + '/api/queue';
+        const NEXT_URL = NGROK_BASE_URL + '/api/next';
+        const ADMIN_LOGIN_URL = NGROK_BASE_URL + '/admin/login'; // ⬅️ Utilisation de l'URL absolue
         
         const AUDIO_PLAYER = document.getElementById('audio-player');
         
@@ -219,15 +222,14 @@
             errorMsg.style.display = 'none';
 
             try {
-                // ⬅️ CETTE REQUÊTE DOIT ATTEINDRE server.js 
+                // Utilise la constante ADMIN_LOGIN_URL qui inclut maintenant NGROK_BASE_URL
                 const response = await fetch(ADMIN_LOGIN_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: password })
                 });
                 
-                // Si la requête échoue ici (erreur réseau/Ngrok), le catch sera appelé, 
-                // sinon, on continue pour lire la réponse du serveur.
+                // Si la requête échoue ici (erreur réseau/Ngrok), le catch sera appelé.
 
                 const result = await response.json();
 
@@ -240,10 +242,10 @@
                     errorMsg.style.display = 'block';
                 }
             } catch (error) {
-                // C'est ici que l'erreur "Erreur de connexion au serveur" est affichée.
+                // L'erreur "Erreur de connexion au serveur" devrait être résolue grâce à l'URL absolue
                 errorMsg.textContent = 'Erreur de connexion au serveur.';
                 errorMsg.style.display = 'block';
-                console.error("Échec de l'envoi de la requête au serveur:", error);
+                console.error("Échec de l'envoi de la requête au serveur (utiliser URL absolue a échoué) :", error);
             } finally {
                 accessButton.disabled = false;
                 accessButton.textContent = 'Accéder';
@@ -331,7 +333,7 @@
                 try {
                     const response = await fetch(API_URL, {
                         method: 'POST',
-                        body: formData // Pas de header Content-Type ici, car FormData le gère
+                        body: formData 
                     });
                     
                     const result = await response.json();
