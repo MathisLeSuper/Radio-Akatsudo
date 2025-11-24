@@ -115,6 +115,24 @@
         #admin-login-form {
             padding-top: 10px;
         }
+        .user-queue-list {
+            list-style: none;
+            padding: 0;
+        }
+        .user-queue-list li {
+            background-color: #444;
+            margin-bottom: 5px;
+            padding: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .user-queue-list .btn-delete {
+            width: auto; 
+            margin-top: 0;
+            padding: 5px 10px;
+            background-color: var(--error-red);
+            float: right;
+        }
     </style>
 </head>
 <body>
@@ -140,27 +158,7 @@
     <div id="submission-form-container">
         
         <div id="submission-form-content">
-             <h2>Soumettre une Musique</h2>
-            <form id="submit-music">
-                <input type="text" id="pseudo" name="pseudo" placeholder="Votre Pseudo Akatsudo" required>
-                <input type="email" id="email" name="email" placeholder="Votre Email (Optionnel)">
-                
-                <p>Choisissez entre un lien ou un fichier :</p>
-                <input type="text" id="url" name="url" placeholder="Lien Musique (YouTube, Spotify, etc.)">
-                
-                <input type="file" id="audioFile" name="audioFile" accept=".mp3,.wav,.ogg" style="display: none;">
-
-                <div id="drop-zone">
-                    Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById('audioFile').click(); return false;">cliquez pour choisir</a>.
-                </div>
-                
-                <p>Début/Fin (Optionnel, en secondes, max 270s) :</p>
-                <input type="number" id="start_time" name="start_time" placeholder="Début (ex: 30)">
-                <input type="number" id="end_time" name="end_time" placeholder="Fin (laissez vide pour max 4m30s)">
-
-                <button type="submit" id="submit-button">Ajouter à la File</button>
-                <p id="countdown-message" style="display: none;"></p>
-            </form>
+             <h2>Chargement...</h2>
         </div>
        
     </div>
@@ -172,12 +170,15 @@
         const API_URL = NGROK_BASE_URL + '/submit';
         const QUEUE_URL = NGROK_BASE_URL + '/api/queue';
         const NEXT_URL = NGROK_BASE_URL + '/api/next';
-        const ADMIN_LOGIN_URL = NGROK_BASE_URL + '/admin/login'; // ⬅️ Utilisation de l'URL absolue
+        const ADMIN_LOGIN_URL = NGROK_BASE_URL + '/admin/login';
+        const USER_INFO_URL = NGROK_BASE_URL + '/api/user/info'; // Pour l'historique utilisateur
+        const USER_DELETE_URL = NGROK_BASE_URL + '/api/user/delete-track'; // Pour la suppression utilisateur
         
         const AUDIO_PLAYER = document.getElementById('audio-player');
         
         const COOLDOWN_KEY = 'lastSubmissionTime';
         const ADMIN_TOKEN_KEY = 'adminToken';
+        const LAST_PSEUDO_KEY = 'lastPseudo';
         const COOLDOWN_MS = 5 * 60 * 1000; 
         
         let currentTrack = null;
@@ -191,7 +192,7 @@
             adminClickCount++;
             if (adminClickCount >= 6) {
                 // Remplacer le contenu du formulaire par le formulaire de connexion admin
-                const container = document.getElementById('submission-form-container');
+                const container = document.getElementById('submission-form-content');
                 container.innerHTML = `
                     <div id="admin-login-form">
                         <h2>🔒 Connexion Administrateur</h2>
@@ -216,25 +217,20 @@
             const accessButton = document.getElementById('admin-access-btn');
             const errorMsg = document.getElementById('admin-error');
             
-            // Verrouillage du bouton
             accessButton.disabled = true;
             accessButton.textContent = 'Vérification...';
             errorMsg.style.display = 'none';
 
             try {
-                // Utilise la constante ADMIN_LOGIN_URL qui inclut maintenant NGROK_BASE_URL
                 const response = await fetch(ADMIN_LOGIN_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: password })
                 });
                 
-                // Si la requête échoue ici (erreur réseau/Ngrok), le catch sera appelé.
-
                 const result = await response.json();
 
-                if (result.success && result.token) {
-                    // Stocke le jeton et redirige
+                if (response.ok && result.success && result.token) {
                     localStorage.setItem(ADMIN_TOKEN_KEY, result.token);
                     window.location.href = 'admin.html'; 
                 } else {
@@ -242,10 +238,9 @@
                     errorMsg.style.display = 'block';
                 }
             } catch (error) {
-                // L'erreur "Erreur de connexion au serveur" devrait être résolue grâce à l'URL absolue
                 errorMsg.textContent = 'Erreur de connexion au serveur.';
                 errorMsg.style.display = 'block';
-                console.error("Échec de l'envoi de la requête au serveur (utiliser URL absolue a échoué) :", error);
+                console.error("Échec de l'envoi de la requête au serveur :", error);
             } finally {
                 accessButton.disabled = false;
                 accessButton.textContent = 'Accéder';
@@ -253,10 +248,12 @@
         }
         
         // --- DRAG AND DROP ---
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('audioFile');
-        
-        if (dropZone && fileInput) { 
+        function setupDropZoneListeners() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('audioFile');
+
+            if (!dropZone || !fileInput) return;
+            
             dropZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 dropZone.classList.add('dragover');
@@ -276,6 +273,15 @@
                     dropZone.innerHTML = `Fichier sélectionné : <strong>${files[0].name}</strong>. Glissez un autre fichier pour le remplacer.`;
                 }
             });
+
+            // Gérer le clic sur le lien pour ouvrir le dialogue fichier
+            const link = dropZone.querySelector('a');
+            if (link) {
+                link.onclick = (e) => {
+                    e.preventDefault();
+                    fileInput.click();
+                };
+            }
         }
 
         // --- Fonctions de Cooldown et Soumission ---
@@ -309,17 +315,22 @@
             }
         }
 
-        if (document.getElementById('submit-music')) { 
-            document.getElementById('submit-music').addEventListener('submit', async (e) => {
+        function setupSubmissionListener() {
+            const form = document.getElementById('submit-music');
+            if (!form) return;
+
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const submitButton = document.getElementById('submit-button');
                 submitButton.disabled = true;
                 submitButton.textContent = 'Envoi...';
 
-                const form = e.target;
                 const formData = new FormData();
+                const pseudoValue = document.getElementById('pseudo').value;
                 
-                formData.append('pseudo', document.getElementById('pseudo').value);
+                localStorage.setItem(LAST_PSEUDO_KEY, pseudoValue); // Sauvegarde du pseudo
+
+                formData.append('pseudo', pseudoValue);
                 formData.append('email', document.getElementById('email').value);
                 formData.append('url', document.getElementById('url').value);
                 formData.append('start_time', document.getElementById('start_time').value);
@@ -338,22 +349,146 @@
                     
                     const result = await response.json();
                     
-                    if (result.success) {
+                    if (response.ok && result.success) {
                         alert('Succès : ' + result.message);
                         form.reset(); 
-                        dropZone.innerHTML = 'Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById(\'audioFile\').click(); return false;">cliquez pour choisir</a>.';
+                        document.getElementById('pseudo').value = pseudoValue; // Réinsérer le pseudo
+                        document.getElementById('drop-zone').innerHTML = 'Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#" onclick="document.getElementById(\'audioFile\').click(); return false;">cliquez pour choisir</a>.';
                         setCooldown(); 
                         updatePlayer(); 
+                        updateUserDisplay(); // Mise à jour de l'affichage utilisateur
                     } else {
-                        alert('Erreur : ' + result.message);
+                         // Afficher le message de bannissement ou autre erreur du serveur
+                        alert('Erreur : ' + (result.message || 'Soumission échouée.'));
                     }
                 } catch (error) {
-                    alert('Erreur réseau ou interne.');
+                    alert('Erreur réseau ou interne lors de la soumission.');
                     console.error('Erreur de soumission :', error);
                 } finally {
                      checkCooldown();
                 }
             });
+        }
+        
+        async function deleteUserTrack(trackId, pseudo) {
+            if (!confirm(`Confirmez-vous la suppression de votre musique (ID ${trackId}) de la file d'attente ?`)) return;
+            
+            try {
+                const response = await fetch(USER_DELETE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: trackId, pseudo: pseudo })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Musique supprimée.');
+                    updatePlayer();
+                    updateUserDisplay(); // Recharger l'affichage utilisateur
+                } else {
+                    alert('Échec de la suppression : ' + result.message);
+                }
+            } catch (error) {
+                alert('Erreur réseau lors de la suppression.');
+            }
+        }
+
+        function createSubmissionFormHTML(currentPseudo) {
+             return `
+                <h2>Soumettre une Musique</h2>
+                <form id="submit-music">
+                    <input type="text" id="pseudo" name="pseudo" placeholder="Votre Pseudo Akatsudo" value="${currentPseudo || ''}" required ${currentPseudo ? 'readonly' : ''}>
+                    <input type="email" id="email" name="email" placeholder="Votre Email (Optionnel)">
+                    
+                    <p>Choisissez entre un lien ou un fichier :</p>
+                    <input type="text" id="url" name="url" placeholder="Lien Musique (YouTube, Spotify, etc.)">
+                    
+                    <input type="file" id="audioFile" name="audioFile" accept=".mp3,.wav,.ogg" style="display: none;">
+
+                    <div id="drop-zone">
+                        Glissez & Déposez un Fichier Audio (MP3, WAV, OGG) ici ou <a href="#">cliquez pour choisir</a>.
+                    </div>
+                    
+                    <p>Début/Fin (Optionnel, en secondes, max 270s) :</p>
+                    <input type="number" id="start_time" name="start_time" placeholder="Début (ex: 30)">
+                    <input type="number" id="end_time" name="end_time" placeholder="Fin (laissez vide pour max 4m30s)">
+
+                    <button type="submit" id="submit-button">Ajouter à la File</button>
+                    <p id="countdown-message" style="display: none;"></p>
+                </form>
+            `;
+        }
+
+        async function updateUserDisplay() {
+            let pseudo = localStorage.getItem(LAST_PSEUDO_KEY);
+            const container = document.getElementById('submission-form-content');
+
+            // Affichage initial du formulaire si aucun pseudo n'est enregistré
+            if (!pseudo) {
+                container.innerHTML = createSubmissionFormHTML('');
+                setupDropZoneListeners();
+                setupSubmissionListener();
+                checkCooldown();
+                return;
+            }
+            
+            try {
+                const response = await fetch(USER_INFO_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pseudo: pseudo })
+                });
+                const data = await response.json();
+
+                if (data.isBanned) {
+                    container.innerHTML = `
+                        <h2>🚫 Bannissement</h2>
+                        <p style="color: var(--error-red);">Le pseudo <strong>${pseudo}</strong> est banni de la soumission de musiques.</p>
+                        <button onclick="localStorage.removeItem(LAST_PSEUDO_KEY); updateUserDisplay();" style="width: auto;">Utiliser un autre Pseudo</button>
+                    `;
+                    return;
+                }
+
+                let userQueueHtml = '';
+                if (data.queue.length > 0) {
+                    userQueueHtml = `
+                        <h3 style="margin-top: 0;">Votre File d'Attente (${data.queue.length} musique(s))</h3>
+                        <ul class="user-queue-list">
+                            ${data.queue.map(t => `
+                                <li>
+                                    <strong>#${t.position}</strong>: ${t.title} 
+                                    <button class="btn btn-delete" onclick="deleteUserTrack(${t.id}, '${pseudo}')">Supprimer</button>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `;
+                } else {
+                    userQueueHtml = '<p>Vous n\'avez aucune musique en file d\'attente.</p>';
+                }
+
+                // Remplacer le contenu du conteneur avec l'info utilisateur et le formulaire
+                container.innerHTML = `
+                    <h2>Soumettre une Musique</h2>
+                    <p>Bonjour <strong>${pseudo}</strong>, voici votre statut :</p>
+                    ${userQueueHtml}
+                    <div id="submit-form-wrapper">
+                        ${createSubmissionFormHTML(pseudo)}
+                    </div>
+                `;
+
+                // Réattacher les écouteurs d'événements
+                setupDropZoneListeners();
+                setupSubmissionListener();
+                checkCooldown();
+
+            } catch (error) {
+                console.error("Erreur lors de la récupération des infos utilisateur:", error);
+                // En cas d'erreur réseau, afficher le formulaire par défaut
+                container.innerHTML = createSubmissionFormHTML(pseudo);
+                setupDropZoneListeners();
+                setupSubmissionListener();
+                checkCooldown();
+            }
         }
         
         // --- LOGIQUE DU LECTEUR ET DU COUPE-MUSIQUE ---
@@ -382,7 +517,8 @@
             // Utiliser une image par défaut si la pochette est manquante
             document.getElementById('current-cover').src = track.coverUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#555"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="30" fill="#ccc">🎧</text></svg>';
             
-            AUDIO_PLAYER.src = track.path; 
+            // Pour des raisons de cache, ajoutez un paramètre temporel
+            AUDIO_PLAYER.src = track.path + '?' + Date.now(); 
             
             if (track.startTime > 0) {
                 AUDIO_PLAYER.currentTime = track.startTime;
@@ -411,8 +547,8 @@
         
         // --- INITIALISATION ---
         window.onload = () => {
-            checkCooldown(); 
             updatePlayer(); 
+            updateUserDisplay(); // Affiche le formulaire ou les infos utilisateur
             setInterval(updatePlayer, 5000); 
         };
     </script>
