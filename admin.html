@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>🔒 Admin Panel - Radio Akatsudo</title>
     <style>
         :root {
@@ -13,25 +13,21 @@
             --accent-red: #D32F2F;
             --accent-blue: #2196F3;
         }
-
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-dark);
             color: var(--text-light);
             padding: 20px;
         }
-
         .container {
             max-width: 1200px;
             margin: 0 auto;
             background-color: var(--bg-medium);
             padding: 30px;
             border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
         }
-
         h1 { color: var(--accent-green); border-bottom: 2px solid var(--accent-green); padding-bottom: 10px; }
-
         .tabs { margin-bottom: 20px; border-bottom: 1px solid #444; }
         .tabs button {
             background-color: transparent;
@@ -48,13 +44,10 @@
             color: var(--accent-green);
             font-weight: bold;
         }
-
         .tab-content { padding-top: 20px; }
-
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #444; }
         th { background-color: #38383a; }
-
         .btn {
             padding: 6px 10px;
             border: none;
@@ -69,7 +62,6 @@
         .btn-ban { background-color: #f39c12; color: white; }
         .btn-unban { background-color: var(--accent-blue); color: white; }
         .btn-logout { background-color: #555; color: white; margin-top: 20px; }
-
         #current-track-info {
             display: flex;
             align-items: center;
@@ -79,7 +71,6 @@
             margin-bottom: 20px;
         }
         #current-track-info img { width: 60px; height: 60px; border-radius: 4px; margin-right: 15px; object-fit: cover; }
-
         .banned-status { color: var(--accent-red); font-weight: bold; }
         .banned-user-list li {
             background-color: #444;
@@ -91,15 +82,13 @@
     </style>
 </head>
 <body>
-
     <div class="container">
         <h1>Administration Radio Akatsudo</h1>
 
         <div id="current-track-info">
             <img id="admin-current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23555'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='30' fill='%23ccc'>🎧</text></svg>" alt="Cover" />
             <div>
-                <strong>En cours : </strong> <span id="admin-current-title">--</span>
-                <br>
+                <strong>En cours : </strong> <span id="admin-current-title">--</span><br>
                 <strong>Par : </strong> <span id="admin-current-pseudo">--</span>
             </div>
         </div>
@@ -126,7 +115,7 @@
             </table>
         </div>
 
-        <div id="users-tab" class="tab-content" style="display: none;">
+        <div id="users-tab" class="tab-content" style="display:none;">
             <h2>Liste des Contributeurs</h2>
             <table id="users-table">
                 <thead>
@@ -140,7 +129,7 @@
                 <tbody></tbody>
             </table>
 
-            <h2 style="margin-top: 30px;">Utilisateurs Bannis</h2>
+            <h2 style="margin-top:30px;">Utilisateurs Bannis</h2>
             <ul id="banned-list" class="banned-user-list"></ul>
         </div>
 
@@ -148,18 +137,22 @@
     </div>
 
     <script>
+        // --- Configuration (mettre à jour si l'URL Ngrok change) ---
         const ADMIN_TOKEN_KEY = 'adminToken';
-        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev';
+        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev'; // remplace si besoin
         const ADMIN_DATA_URL = NGROK_BASE_URL + '/api/admin/data';
         const DELETE_URL = NGROK_BASE_URL + '/api/admin/delete-track';
         const BAN_URL = NGROK_BASE_URL + '/api/admin/ban';
         const UNBAN_URL = NGROK_BASE_URL + '/api/admin/unban';
 
+        // --- Vérification token admin ---
         const ADMIN_TOKEN = localStorage.getItem(ADMIN_TOKEN_KEY);
         if (!ADMIN_TOKEN) {
+            // redirige vers la page publique si pas connecté
             window.location.href = 'index.html';
         }
 
+        // --- Utilitaires UI ---
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
             document.getElementById(tabId).style.display = 'block';
@@ -172,53 +165,31 @@
             window.location.href = 'index.html';
         }
 
+        // --- Ping santé pour éviter les réponses HTML ---
         async function pingHealth() {
             try {
                 const res = await fetch(NGROK_BASE_URL + '/api/queue?t=' + Date.now(), {
-                    headers: { 'Accept': 'application/json' }
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
                 });
                 const ct = res.headers.get('content-type') || '';
                 return res.ok && ct.includes('application/json');
-            } catch {
+            } catch (e) {
                 return false;
             }
         }
 
-        async function fetchAndRenderData() {
-            try {
-                const response = await fetch(ADMIN_DATA_URL + '?t=' + Date.now(), {
-                    headers: {
-                        'Authorization': `Bearer ${ADMIN_TOKEN}`,
-                        'Accept': 'application/json'
-                    }
-                });
-                if (!response.ok) throw new Error(`Accès refusé ou erreur serveur (${response.status})`);
-                const ct = response.headers.get('content-type') || '';
-                if (!ct.includes('application/json')) {
-                    const text = await response.text();
-                    throw new Error(`Réponse non-JSON: ${text.slice(0, 120)}...`);
-                }
-                const data = await response.json();
-
-                renderCurrentTrack(data.current);
-                renderQueue(data.queue);
-                renderUsers(data.users, data.bannedUsers);
-            } catch (error) {
-                console.error('Erreur de chargement des données admin:', error);
-                alert(`Erreur: Impossible de charger les données du serveur. (${error.message})`);
-                if (String(error.message).includes("Accès refusé")) logout();
-            }
-        }
-
+        // --- Rendu des données (fonctions existantes conservées) ---
         function renderCurrentTrack(track) {
             const titleEl = document.getElementById('admin-current-title');
             const pseudoEl = document.getElementById('admin-current-pseudo');
             const coverEl = document.getElementById('admin-current-cover');
 
             if (track) {
-                titleEl.textContent = track.title;
-                pseudoEl.textContent = track.pseudo;
-                coverEl.src = track.coverUrl || coverEl.src;
+                titleEl.textContent = track.title || '--';
+                pseudoEl.textContent = track.pseudo || '--';
+                if (track.coverUrl) coverEl.src = track.coverUrl;
             } else {
                 titleEl.textContent = 'AUCUNE MUSIQUE EN COURS';
                 pseudoEl.textContent = '---';
@@ -229,14 +200,14 @@
         function renderQueue(queue) {
             const tbody = document.querySelector('#queue-table tbody');
             tbody.innerHTML = '';
-
+            if (!Array.isArray(queue)) return;
             queue.forEach((track, index) => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${index + 1}</td>
-                    <td>${track.title}</td>
-                    <td>${track.pseudo}</td>
-                    <td>${track.email || 'N/A'}</td>
+                    <td>${escapeHtml(track.title || '—')}</td>
+                    <td>${escapeHtml(track.pseudo || '—')}</td>
+                    <td>${escapeHtml(track.email || 'N/A')}</td>
                     <td>${track.startTime}s - ${track.endTime}s</td>
                     <td>
                         <button class="btn btn-delete" onclick="deleteTrack(${track.id})">Supprimer</button>
@@ -248,18 +219,20 @@
         function renderUsers(users, bannedUsers) {
             const tbody = document.querySelector('#users-table tbody');
             tbody.innerHTML = '';
+            if (!Array.isArray(users)) users = [];
+            if (!Array.isArray(bannedUsers)) bannedUsers = [];
 
             users.forEach(user => {
                 const isBanned = bannedUsers.includes(user.pseudo.toLowerCase());
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>${user.pseudo}</td>
+                    <td>${escapeHtml(user.pseudo)}</td>
                     <td>${isBanned ? '<span class="banned-status">Banni</span>' : 'Actif'}</td>
-                    <td>${user.submissions.length}</td>
+                    <td>${(user.submissions && user.submissions.length) || 0}</td>
                     <td>
                         ${isBanned
-                            ? `<button class="btn btn-unban" onclick="toggleBan('${user.pseudo}', false)">Débloquer</button>`
-                            : `<button class="btn btn-ban" onclick="toggleBan('${user.pseudo}', true)">Bannir</button>`
+                            ? `<button class="btn btn-unban" onclick="toggleBan('${escapeJs(user.pseudo)}', false)">Débloquer</button>`
+                            : `<button class="btn btn-ban" onclick="toggleBan('${escapeJs(user.pseudo)}', true)">Bannir</button>`
                         }
                     </td>
                 `;
@@ -270,16 +243,64 @@
             bannedUsers.forEach(pseudo => {
                 const li = document.createElement('li');
                 li.innerHTML = `
-                    <span class="banned-status">${pseudo}</span>
-                    <button class="btn btn-unban" style="float: right;" onclick="toggleBan('${pseudo}', false)">Débloquer</button>
+                    <span class="banned-status">${escapeHtml(pseudo)}</span>
+                    <button class="btn btn-unban" style="float:right;" onclick="toggleBan('${escapeJs(pseudo)}', false)">Débloquer</button>
                 `;
                 bannedListEl.appendChild(li);
             });
         }
 
+        // --- Sécurité simple pour l'affichage (échapper) ---
+        function escapeHtml(str) {
+            if (!str && str !== 0) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+        function escapeJs(str) {
+            if (!str && str !== 0) return '';
+            return String(str).replace(/'/g, "\\'");
+        }
+
+        // --- Fetch sécurisé des données admin (vérifie content-type) ---
+        async function fetchAndRenderData() {
+            try {
+                const response = await fetch(ADMIN_DATA_URL + '?t=' + Date.now(), {
+                    headers: {
+                        'Authorization': `Bearer ${ADMIN_TOKEN}`,
+                        'Accept': 'application/json'
+                    },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) throw new Error(`Accès refusé ou erreur serveur (${response.status})`);
+
+                const ct = response.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error(`Réponse non-JSON: ${text.slice(0,200)}...`);
+                }
+
+                const data = await response.json();
+                renderCurrentTrack(data.current);
+                renderQueue(data.queue);
+                renderUsers(data.users, data.bannedUsers);
+            } catch (error) {
+                console.error('Erreur de chargement des données admin:', error);
+                alert(`Erreur: Impossible de charger les données du serveur. (${error.message})`);
+                if (String(error.message).includes('Accès refusé')) {
+                    localStorage.removeItem(ADMIN_TOKEN_KEY);
+                    window.location.href = 'index.html';
+                }
+            }
+        }
+
+        // --- Actions admin (envoient Authorization) ---
         async function deleteTrack(trackId) {
             if (!confirm(`Confirmez-vous la suppression de la musique ID ${trackId} ?`)) return;
-
             try {
                 const res = await fetch(DELETE_URL, {
                     method: 'POST',
@@ -298,16 +319,15 @@
                 } else {
                     alert(`Échec de la suppression : ${payload.message || res.status}`);
                 }
-            } catch (error) {
+            } catch (e) {
+                console.error(e);
                 alert('Échec de la suppression.');
             }
         }
 
         async function toggleBan(pseudo, shouldBan) {
             if (!confirm(`Confirmez-vous l'action ${shouldBan ? 'Bannir' : 'Débloquer'} pour ${pseudo} ?`)) return;
-
             const url = shouldBan ? BAN_URL : UNBAN_URL;
-
             try {
                 const res = await fetch(url, {
                     method: 'POST',
@@ -316,7 +336,7 @@
                         'Authorization': `Bearer ${ADMIN_TOKEN}`,
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ pseudo })
+                    body: JSON.stringify({ pseudo: pseudo })
                 });
                 const ct = res.headers.get('content-type') || '';
                 const payload = ct.includes('application/json') ? await res.json() : { success: res.ok };
@@ -326,16 +346,21 @@
                 } else {
                     alert(`Échec de l'action : ${payload.message || res.status}`);
                 }
-            } catch (error) {
-                alert(`Échec de l'action.`);
+            } catch (e) {
+                console.error(e);
+                alert('Échec de l\'action.');
             }
         }
 
+        // --- Démarrage ---
         window.onload = async () => {
-            if (!(await pingHealth())) {
-                alert('Backend indisponible (Ngrok). Vérifie que le tunnel est actif et l’URL à jour.');
+            // Vérifier la santé du backend avant de tenter de charger les données
+            const ok = await pingHealth();
+            if (!ok) {
+                alert('Backend indisponible (Ngrok). Vérifie que le tunnel est actif et l\'URL à jour.');
                 return;
             }
+            // Charger et rafraîchir périodiquement
             fetchAndRenderData();
             setInterval(fetchAndRenderData, 5000);
         };
