@@ -31,8 +31,7 @@
         }
 
         h1 { color: var(--accent-green); border-bottom: 2px solid var(--accent-green); padding-bottom: 10px; }
-        
-        /* Navigation (Tabs) */
+
         .tabs { margin-bottom: 20px; border-bottom: 1px solid #444; }
         .tabs button {
             background-color: transparent;
@@ -50,15 +49,12 @@
             font-weight: bold;
         }
 
-        /* Contenu */
         .tab-content { padding-top: 20px; }
-        
-        /* Tableaux */
+
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #444; }
         th { background-color: #38383a; }
-        
-        /* Boutons d'Action */
+
         .btn {
             padding: 6px 10px;
             border: none;
@@ -73,8 +69,7 @@
         .btn-ban { background-color: #f39c12; color: white; }
         .btn-unban { background-color: var(--accent-blue); color: white; }
         .btn-logout { background-color: #555; color: white; margin-top: 20px; }
-        
-        /* Piste en cours */
+
         #current-track-info {
             display: flex;
             align-items: center;
@@ -84,8 +79,7 @@
             margin-bottom: 20px;
         }
         #current-track-info img { width: 60px; height: 60px; border-radius: 4px; margin-right: 15px; object-fit: cover; }
-        
-        /* Bannis */
+
         .banned-status { color: var(--accent-red); font-weight: bold; }
         .banned-user-list li {
             background-color: #444;
@@ -100,7 +94,7 @@
 
     <div class="container">
         <h1>Administration Radio Akatsudo</h1>
-        
+
         <div id="current-track-info">
             <img id="admin-current-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23555'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='30' fill='%23ccc'>🎧</text></svg>" alt="Cover" />
             <div>
@@ -128,11 +122,10 @@
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    </tbody>
+                <tbody></tbody>
             </table>
         </div>
-        
+
         <div id="users-tab" class="tab-content" style="display: none;">
             <h2>Liste des Contributeurs</h2>
             <table id="users-table">
@@ -144,64 +137,76 @@
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    </tbody>
+                <tbody></tbody>
             </table>
-            
+
             <h2 style="margin-top: 30px;">Utilisateurs Bannis</h2>
-            <ul id="banned-list" class="banned-user-list">
-                </ul>
+            <ul id="banned-list" class="banned-user-list"></ul>
         </div>
-        
+
         <button class="btn btn-logout" onclick="logout()">Déconnexion</button>
     </div>
 
     <script>
         const ADMIN_TOKEN_KEY = 'adminToken';
-        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev'; 
+        const NGROK_BASE_URL = 'https://pearlier-captivatingly-so.ngrok-free.dev';
         const ADMIN_DATA_URL = NGROK_BASE_URL + '/api/admin/data';
         const DELETE_URL = NGROK_BASE_URL + '/api/admin/delete-track';
         const BAN_URL = NGROK_BASE_URL + '/api/admin/ban';
         const UNBAN_URL = NGROK_BASE_URL + '/api/admin/unban';
 
-        // --- Vérification de l'authentification ---
         const ADMIN_TOKEN = localStorage.getItem(ADMIN_TOKEN_KEY);
         if (!ADMIN_TOKEN) {
             window.location.href = 'index.html';
         }
 
-        // --- Fonctions utilitaires ---
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
             document.getElementById(tabId).style.display = 'block';
             document.querySelectorAll('.tabs button').forEach(btn => btn.classList.remove('active'));
             document.querySelector(`.tabs button[onclick*="${tabId}"]`).classList.add('active');
         }
-        
+
         function logout() {
             localStorage.removeItem(ADMIN_TOKEN_KEY);
             window.location.href = 'index.html';
         }
 
-        // --- Rendu des Données ---
+        async function pingHealth() {
+            try {
+                const res = await fetch(NGROK_BASE_URL + '/api/queue?t=' + Date.now(), {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const ct = res.headers.get('content-type') || '';
+                return res.ok && ct.includes('application/json');
+            } catch {
+                return false;
+            }
+        }
+
         async function fetchAndRenderData() {
             try {
-                const response = await fetch(ADMIN_DATA_URL, {
-                    // Les headers d'autorisation sont ici, mais la vérification est côté server.js
-                    headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` } 
+                const response = await fetch(ADMIN_DATA_URL + '?t=' + Date.now(), {
+                    headers: {
+                        'Authorization': `Bearer ${ADMIN_TOKEN}`,
+                        'Accept': 'application/json'
+                    }
                 });
-                if (!response.ok) throw new Error("Accès refusé ou erreur serveur.");
-
+                if (!response.ok) throw new Error(`Accès refusé ou erreur serveur (${response.status})`);
+                const ct = response.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error(`Réponse non-JSON: ${text.slice(0, 120)}...`);
+                }
                 const data = await response.json();
-                
+
                 renderCurrentTrack(data.current);
                 renderQueue(data.queue);
                 renderUsers(data.users, data.bannedUsers);
             } catch (error) {
                 console.error('Erreur de chargement des données admin:', error);
                 alert(`Erreur: Impossible de charger les données du serveur. (${error.message})`);
-                // En cas d'erreur critique (token invalide), déconnecter
-                if (error.message.includes("Accès refusé")) logout(); 
+                if (String(error.message).includes("Accès refusé")) logout();
             }
         }
 
@@ -209,7 +214,7 @@
             const titleEl = document.getElementById('admin-current-title');
             const pseudoEl = document.getElementById('admin-current-pseudo');
             const coverEl = document.getElementById('admin-current-cover');
-            
+
             if (track) {
                 titleEl.textContent = track.title;
                 pseudoEl.textContent = track.pseudo;
@@ -223,7 +228,7 @@
 
         function renderQueue(queue) {
             const tbody = document.querySelector('#queue-table tbody');
-            tbody.innerHTML = ''; 
+            tbody.innerHTML = '';
 
             queue.forEach((track, index) => {
                 const row = tbody.insertRow();
@@ -243,8 +248,7 @@
         function renderUsers(users, bannedUsers) {
             const tbody = document.querySelector('#users-table tbody');
             tbody.innerHTML = '';
-            
-            // Afficher tous les contributeurs enregistrés dans db.users
+
             users.forEach(user => {
                 const isBanned = bannedUsers.includes(user.pseudo.toLowerCase());
                 const row = tbody.insertRow();
@@ -253,7 +257,7 @@
                     <td>${isBanned ? '<span class="banned-status">Banni</span>' : 'Actif'}</td>
                     <td>${user.submissions.length}</td>
                     <td>
-                        ${isBanned 
+                        ${isBanned
                             ? `<button class="btn btn-unban" onclick="toggleBan('${user.pseudo}', false)">Débloquer</button>`
                             : `<button class="btn btn-ban" onclick="toggleBan('${user.pseudo}', true)">Bannir</button>`
                         }
@@ -261,31 +265,39 @@
                 `;
             });
 
-            // Afficher la liste des bannis séparément (ceux qui n'ont pas forcément soumis, juste bannis)
             const bannedListEl = document.getElementById('banned-list');
             bannedListEl.innerHTML = '';
             bannedUsers.forEach(pseudo => {
                 const li = document.createElement('li');
                 li.innerHTML = `
-                    <span class="banned-status">${pseudo}</span> 
+                    <span class="banned-status">${pseudo}</span>
                     <button class="btn btn-unban" style="float: right;" onclick="toggleBan('${pseudo}', false)">Débloquer</button>
                 `;
                 bannedListEl.appendChild(li);
             });
         }
 
-        // --- Actions Admin ---
         async function deleteTrack(trackId) {
             if (!confirm(`Confirmez-vous la suppression de la musique ID ${trackId} ?`)) return;
-            
+
             try {
-                await fetch(DELETE_URL, {
+                const res = await fetch(DELETE_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ADMIN_TOKEN}`,
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ id: trackId })
                 });
-                alert('Musique supprimée.');
-                fetchAndRenderData(); // Recharger les données
+                const ct = res.headers.get('content-type') || '';
+                const payload = ct.includes('application/json') ? await res.json() : { success: res.ok };
+                if (res.ok && payload.success !== false) {
+                    alert('Musique supprimée.');
+                    fetchAndRenderData();
+                } else {
+                    alert(`Échec de la suppression : ${payload.message || res.status}`);
+                }
             } catch (error) {
                 alert('Échec de la suppression.');
             }
@@ -295,25 +307,37 @@
             if (!confirm(`Confirmez-vous l'action ${shouldBan ? 'Bannir' : 'Débloquer'} pour ${pseudo} ?`)) return;
 
             const url = shouldBan ? BAN_URL : UNBAN_URL;
-            
+
             try {
-                await fetch(url, {
+                const res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pseudo: pseudo })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ADMIN_TOKEN}`,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ pseudo })
                 });
-                alert(`Utilisateur ${pseudo} ${shouldBan ? 'banni' : 'débloqué'} !`);
-                fetchAndRenderData(); 
+                const ct = res.headers.get('content-type') || '';
+                const payload = ct.includes('application/json') ? await res.json() : { success: res.ok };
+                if (res.ok && payload.success !== false) {
+                    alert(`Utilisateur ${pseudo} ${shouldBan ? 'banni' : 'débloqué'} !`);
+                    fetchAndRenderData();
+                } else {
+                    alert(`Échec de l'action : ${payload.message || res.status}`);
+                }
             } catch (error) {
                 alert(`Échec de l'action.`);
             }
         }
-        
-        // --- Démarrage ---
-        window.onload = () => {
+
+        window.onload = async () => {
+            if (!(await pingHealth())) {
+                alert('Backend indisponible (Ngrok). Vérifie que le tunnel est actif et l’URL à jour.');
+                return;
+            }
             fetchAndRenderData();
-            // Rafraîchir toutes les 5 secondes
-            setInterval(fetchAndRenderData, 5000); 
+            setInterval(fetchAndRenderData, 5000);
         };
     </script>
 </body>
